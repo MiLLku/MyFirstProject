@@ -1,9 +1,12 @@
 package io.jbnu.test;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input.Buttons;
+import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.box2d.*;
@@ -16,126 +19,133 @@ public class GameScreen extends ScreenAdapter {
     private final Body player;
     private final OrthographicCamera camera;
     private final Viewport viewport;
+    private final Ground ground;
+    private final ShapeRenderer shapeRenderer;
 
-    private Vector2 dragStartPos = null; // 드래그 시작 위치
+    private boolean isDragging = false;
+    private final Vector3 touchStartPos = new Vector3();
+    private final Vector2 defaultGravity = new Vector2(0, -2.0f);
+    private final float MAX_DRAG_DISTANCE = 3.0f;
+
+    // 더블 점프 기능 추가
+    private int jumpCount = 0;
+    private final int MAX_JUMPS = 2;
 
     public GameScreen() {
         camera = new OrthographicCamera();
-        viewport = new FitViewport(16, 9, camera); // 게임 월드 크기 설정
+        viewport = new FitViewport(16, 9, camera);
         camera.setToOrtho(false, 16, 9);
 
-        world = new World(new Vector2(0, -9.8f), true); // 중력 설정
-        box2DDebugRenderer = new Box2DDebugRenderer(); // 물리 객체 시각화 렌더러
+        world = new World(defaultGravity, true);
+        world.setContactListener(new GameContactListener(this)); // 충돌 감지 리스너 설정
+        box2DDebugRenderer = new Box2DDebugRenderer();
+        shapeRenderer = new ShapeRenderer();
 
-        player = createPlayer(); // 플레이어 생성
-        createGround(); // 바닥 생성
+        player = createPlayer();
+        ground = new Ground(world);
     }
 
-    /**
-     * 플레이어 사각형을 생성합니다.
-     */
+    // 더블 점프 횟수를 리셋하는 메서드
+    public void resetJumpCount() {
+        jumpCount = 0;
+    }
+
     private Body createPlayer() {
         BodyDef bodyDef = new BodyDef();
-        bodyDef.type = BodyDef.BodyType.DynamicBody; // 움직이는 객체
-        bodyDef.position.set(2, 5); // 초기 위치
+        bodyDef.type = BodyDef.BodyType.DynamicBody;
+        bodyDef.position.set(2, 5);
+        bodyDef.fixedRotation = true;
 
         Body body = world.createBody(bodyDef);
 
         PolygonShape shape = new PolygonShape();
-        shape.setAsBox(0.5f, 0.5f); // 1x1 크기의 사각형
+        shape.setAsBox(0.5f, 0.5f);
 
         FixtureDef fixtureDef = new FixtureDef();
         fixtureDef.shape = shape;
-        fixtureDef.density = 1.0f;     // 밀도
-        fixtureDef.friction = 0.5f;    // 마찰력
-        fixtureDef.restitution = 0.1f; // 반발력 (튕기는 정도)
+        fixtureDef.density = 1.0f;
+        fixtureDef.friction = 0.5f;
+        fixtureDef.restitution = 0.1f;
 
-        body.createFixture(fixtureDef);
+        // 플레이어 Fixture에 "player" 식별자 설정
+        body.createFixture(fixtureDef).setUserData("player");
         shape.dispose();
         return body;
     }
 
-    /**
-     * 바닥을 생성합니다.
-     */
-    private void createGround() {
-        // 일반 바닥
-        createStaticBody(0, 0, 12, 1, 0.6f); // x, y, 너비, 높이, 마찰력
-        // 미끄러운 바닥 (얼음)
-        createStaticBody(14, 0, 10, 1, 0.1f);
-    }
-
-    /**
-     * 고정된 물리 객체(바닥)를 생성하는 헬퍼 함수
-     */
-    private void createStaticBody(float x, float y, float width, float height, float friction) {
-        BodyDef bodyDef = new BodyDef();
-        bodyDef.type = BodyDef.BodyType.StaticBody; // 움직이지 않는 객체
-        bodyDef.position.set(x + width / 2, y + height / 2);
-
-        Body body = world.createBody(bodyDef);
-
-        PolygonShape shape = new PolygonShape();
-        shape.setAsBox(width / 2, height / 2);
-
-        FixtureDef fixtureDef = new FixtureDef();
-        fixtureDef.shape = shape;
-        fixtureDef.friction = friction; // 바닥마다 다른 마찰력 설정
-
-        body.createFixture(fixtureDef);
-        shape.dispose();
-    }
-
     @Override
     public void render(float delta) {
-        // 입력 처리
         handleInput();
-
-        // 물리 시뮬레이션
         world.step(1 / 60f, 6, 2);
 
-        // 화면 클리어
+        camera.position.set(player.getPosition().x, player.getPosition().y, 0);
+        camera.update();
+
         Gdx.gl.glClearColor(0.2f, 0.2f, 0.2f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        // 카메라 업데이트
-        camera.update();
+        if (isDragging) {
+            Vector3 currentPos = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
+            camera.unproject(currentPos);
 
-        // Box2D 객체 그리기 (디버그용)
+            Vector2 lineVec = new Vector2(currentPos.x - touchStartPos.x, currentPos.y - touchStartPos.y);
+            if (lineVec.len() > MAX_DRAG_DISTANCE) {
+                lineVec.setLength(MAX_DRAG_DISTANCE);
+            }
+
+            shapeRenderer.setProjectionMatrix(camera.combined);
+            shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+
+            // 최대 범위 원 (노란색)
+            shapeRenderer.setColor(1, 1, 0, 1);
+            shapeRenderer.circle(touchStartPos.x, touchStartPos.y, MAX_DRAG_DISTANCE, 30);
+
+            // 당기는 방향과 힘 표시선 (빨간색)
+            shapeRenderer.setColor(1, 0, 0, 1);
+            shapeRenderer.line(touchStartPos.x, touchStartPos.y, touchStartPos.x - lineVec.x, touchStartPos.y - lineVec.y);
+            shapeRenderer.end();
+        }
+
         box2DDebugRenderer.render(world, camera.combined);
     }
 
-    /**
-     * 사용자 입력을 처리합니다.
-     */
     private void handleInput() {
-        if (Gdx.input.isTouched()) {
-            Vector3 touchPos = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
-            camera.unproject(touchPos); // 화면 좌표를 게임 월드 좌표로 변환
+        if (Gdx.input.isKeyPressed(Keys.SPACE)) {
+            world.setGravity(defaultGravity.cpy().scl(2.0f));
+        } else {
+            world.setGravity(defaultGravity);
+        }
 
-            if (Gdx.input.justTouched()) {
-                // 터치가 시작되면 드래그 시작 위치 기록
-                if (player.getFixtureList().first().testPoint(touchPos.x, touchPos.y)) {
-                    dragStartPos = new Vector2(touchPos.x, touchPos.y);
+        if (Gdx.input.isButtonPressed(Buttons.LEFT)) {
+            Vector3 currentTouchPos = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
+            camera.unproject(currentTouchPos);
+
+            if (!isDragging) {
+                // 점프 횟수가 남아있을 때만 드래그 시작 가능
+                if (jumpCount < MAX_JUMPS && player.getFixtureList().first().testPoint(currentTouchPos.x, currentTouchPos.y)) {
+                    isDragging = true;
+                    touchStartPos.set(player.getPosition().x, player.getPosition().y, 0);
                 }
             }
-        } else if (dragStartPos != null) {
-            // 터치가 끝나면 (손을 떼면) 힘을 계산하고 적용
+        } else if (isDragging) {
+            isDragging = false;
+            jumpCount++; // 날릴 때마다 점프 횟수 증가
+
             Vector3 touchEndPos3D = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
             camera.unproject(touchEndPos3D);
-            Vector2 touchEndPos = new Vector2(touchEndPos3D.x, touchEndPos3D.y);
 
-            // 드래그 방향과 거리 계산
-            Vector2 dragVector = new Vector2(dragStartPos).sub(touchEndPos);
+            Vector2 dragVector = new Vector2(touchStartPos.x, touchStartPos.y).sub(touchEndPos3D.x, touchEndPos3D.y);
 
-            // 힘의 크기를 제한하여 너무 강하게 날아가지 않도록 조절
-            float forceMagnitude = Math.min(dragVector.len() * 5.0f, 150.0f); // 힘의 배수와 최대 힘 설정
+            if (dragVector.len() > MAX_DRAG_DISTANCE) {
+                dragVector.setLength(MAX_DRAG_DISTANCE);
+            }
 
-            // 드래그 방향과 계산된 힘으로 발사
+            // 힘 배수 상향
+            float forceMagnitude = dragVector.len() * 50.0f;
+
             Vector2 force = dragVector.setLength(forceMagnitude);
+            player.setLinearVelocity(0, 0);
             player.applyForceToCenter(force, true);
-
-            dragStartPos = null; // 드래그 상태 초기화
         }
     }
 
@@ -148,5 +158,6 @@ public class GameScreen extends ScreenAdapter {
     public void dispose() {
         world.dispose();
         box2DDebugRenderer.dispose();
+        shapeRenderer.dispose();
     }
 }
