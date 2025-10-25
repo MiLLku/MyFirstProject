@@ -1,38 +1,71 @@
 package io.jbnu.test;
 
-import com.badlogic.gdx.physics.box2d.Contact;
-import com.badlogic.gdx.physics.box2d.ContactImpulse;
-import com.badlogic.gdx.physics.box2d.ContactListener;
-import com.badlogic.gdx.physics.box2d.Fixture;
-import com.badlogic.gdx.physics.box2d.Manifold;
+import com.badlogic.gdx.physics.box2d.*;
 
 public class GameContactListener implements ContactListener {
+
 
     private final GameScreen gameScreen;
 
     public GameContactListener(GameScreen gameScreen) {
+
+
         this.gameScreen = gameScreen;
     }
 
     @Override
-    public void beginContact(Contact contact) {
+    public void beginContact(Contact contact)
+    {
         Fixture fixtureA = contact.getFixtureA();
         Fixture fixtureB = contact.getFixtureB();
 
-        // 두 충돌체 중 하나가 'player'이고 다른 하나가 'ground'인지 확인
-        if (isFixturePlayer(fixtureA) && isFixtureGround(fixtureB) ||
-            isFixtureGround(fixtureA) && isFixturePlayer(fixtureB)) {
-            // 플레이어가 땅에 닿으면 점프 횟수 초기화
+        Fixture playerFixture = null;
+        Fixture groundFixture = null;
+        Ground.GroundUserData groundUserData = null;
+
+        if (isFixturePlayer(fixtureA) && isFixtureGround(fixtureB))
+        {
+            playerFixture = fixtureA;
+            groundFixture = fixtureB;
+            if (fixtureB.getUserData() instanceof Ground.GroundUserData)
+            {
+                groundUserData = (Ground.GroundUserData) fixtureB.getUserData();
+            }
+        }
+        else if (isFixtureGround(fixtureA) && isFixturePlayer(fixtureB))
+        {
+            playerFixture = fixtureB;
+            groundFixture = fixtureA;
+            if (fixtureA.getUserData() instanceof Ground.GroundUserData)
+            {
+                groundUserData = (Ground.GroundUserData) fixtureA.getUserData();
+            }
+        }
+
+        // 충돌 처리
+        if (playerFixture != null && groundUserData != null)
+        {
             gameScreen.resetJumpCount();
+
+            if (!groundUserData.touched) {
+                gameScreen.addScore(100);
+                groundUserData.touched = true;
+            }
         }
     }
 
-    private boolean isFixturePlayer(Fixture fixture) {
+    private boolean isFixturePlayer(Fixture fixture)
+    {
         return "player".equals(fixture.getUserData());
     }
 
-    private boolean isFixtureGround(Fixture fixture) {
-        return "ground".equals(fixture.getUserData());
+    private boolean isFixtureGround(Fixture fixture)
+    {
+        if (fixture.getUserData() instanceof Ground.GroundUserData)
+        {
+            return "ground".equals(((Ground.GroundUserData) fixture.getUserData()).type);
+        }
+        return false;
     }
 
     @Override
