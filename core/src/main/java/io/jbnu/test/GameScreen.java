@@ -116,7 +116,7 @@ public class GameScreen extends ScreenAdapter
         FixtureDef fixtureDef = new FixtureDef();
         fixtureDef.shape = shape;
         fixtureDef.density = 1.0f;
-        fixtureDef.friction = 0.5f;
+        fixtureDef.friction = 0.7f;
         fixtureDef.restitution = 0.1f;
 
         body.createFixture(fixtureDef).setUserData("player");
@@ -273,32 +273,37 @@ public class GameScreen extends ScreenAdapter
         }
         shapeRenderer.end();
 
-        if (isDragging)
-        {
-            Vector3 currentPos = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
-            camera.unproject(currentPos);
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.begin(ShapeType.Filled);
+        shapeRenderer.setColor(Color.WHITE);
 
-            Vector2 lineVec = new Vector2(currentPos.x - touchStartPos.x, currentPos.y - touchStartPos.y);
-            if (lineVec.len() > MAX_DRAG_DISTANCE)
-            {
-                lineVec.setLength(MAX_DRAG_DISTANCE);
-            }
+        Vector2 playerPos = player.getPosition();
+        float playerAngle = player.getAngle() * MathUtils.radiansToDegrees;
+        float playerHalfWidth = 0.4f;
+        float playerHalfHeight = 0.4f;
 
-            shapeRenderer.setProjectionMatrix(camera.combined);
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.identity();
+        shapeRenderer.translate(playerPos.x, playerPos.y, 0);
+        shapeRenderer.rotate(0, 0, 1, playerAngle);
+        shapeRenderer.rect(-playerHalfWidth, -playerHalfHeight, playerHalfWidth * 2, playerHalfHeight * 2);
 
-            shapeRenderer.setColor(Color.YELLOW);
-            shapeRenderer.circle(touchStartPos.x, touchStartPos.y, MAX_DRAG_DISTANCE, 30);
+        shapeRenderer.end();
 
-            shapeRenderer.setColor(Color.RED);
-            shapeRenderer.line(touchStartPos.x, touchStartPos.y, touchStartPos.x - lineVec.x, touchStartPos.y - lineVec.y);
-            shapeRenderer.end();
-        }
+        box2DDebugRenderer.render(world, camera.combined);
 
         batch.setProjectionMatrix(uiCamera.combined);
         batch.begin();
-        font.draw(batch, "Stage: " + stage, Gdx.graphics.getWidth() - 100, Gdx.graphics.getHeight() - 20, 100, Align.left, false);
-        font.draw(batch, "Score: " + score, 20, Gdx.graphics.getHeight() - 20, 100, Align.left, false);
+
+        font.draw(batch, "Stage: " + stage,
+            uiCamera.viewportWidth - 100,
+            uiCamera.viewportHeight - 20,
+            100, Align.left, false);
+
+        font.draw(batch, "Score: " + score,
+            20,
+            uiCamera.viewportHeight - 20,
+            100, Align.left, false);
+
         batch.end();
     }
 
@@ -306,7 +311,7 @@ public class GameScreen extends ScreenAdapter
     {
         if (Gdx.input.isKeyPressed(Keys.SPACE))
         {
-            world.setGravity(defaultGravity.cpy().scl(2.0f)); // scl 오타 수정
+            world.setGravity(defaultGravity.cpy().scl(2.0f)); 
         }
         else
         {
