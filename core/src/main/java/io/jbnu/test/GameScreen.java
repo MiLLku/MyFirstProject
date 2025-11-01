@@ -2,6 +2,7 @@ package io.jbnu.test;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.Input.Buttons;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.ScreenAdapter;
@@ -23,6 +24,8 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 
 public class GameScreen extends ScreenAdapter
 {
+    private boolean isPaused = false;
+    private Texture pauseTexture;
     private SpriteBatch batch;
     private BitmapFont font;
     private OrthographicCamera uiCamera;
@@ -49,8 +52,9 @@ public class GameScreen extends ScreenAdapter
     private final float REMOVE_DISTANCE = 25f;
     private int score = 0;
     private int stage = 1;
-    private final int SCORE_PER_STAGE = 1000;
-    private final float MAX_ROTATION_ANGLE = MathUtils.PI / 6;
+    private final int SCORE_PER_STAGE = 100;
+    private final float MAX_ROTATION_ANGLE_STAGE_2 = MathUtils.PI / 6;
+    private final float MAX_ROTATION_ANGLE_STAGE_3 = MathUtils.PI / 4;
 
     public GameScreen()
     {
@@ -71,9 +75,17 @@ public class GameScreen extends ScreenAdapter
         batch = new SpriteBatch();
         font = new BitmapFont();
         font.setColor(Color.WHITE);
+        pauseTexture = new Texture(Gdx.files.internal("pause.png"));
 
         player = createPlayer();
         createInitialGrounds();
+    }
+    private void handlePauseInput()
+    {
+        if (Gdx.input.isKeyJustPressed(Keys.ESCAPE))
+        {
+            isPaused = !isPaused;
+        }
     }
 
     private void createInitialGrounds()
@@ -153,14 +165,23 @@ public class GameScreen extends ScreenAdapter
             float angle = 0;
             float friction;
 
-            int randType = MathUtils.random(0, 99); // 0~99 사이 난수 생성
+            float currentMaxAngle = 0;
+            if (stage == 2)
+            {
+                currentMaxAngle = MAX_ROTATION_ANGLE_STAGE_2;
+            } else if (stage >= 3)
+            {
+                currentMaxAngle = MAX_ROTATION_ANGLE_STAGE_3;
+            }
+
+            int randType = MathUtils.random(0, 99);
 
             if (stage >= 2 && randType < 20)
             {
                 friction = Ground.FRICTION_HIGH;
-                if (MathUtils.randomBoolean(0.4f))
+                if (currentMaxAngle > 0 && MathUtils.randomBoolean(0.4f))
                 {
-                    angle = MathUtils.random(-MAX_ROTATION_ANGLE, MAX_ROTATION_ANGLE);
+                    angle = MathUtils.random(-currentMaxAngle, currentMaxAngle);
                 }
             }
             else if (randType < 50)
@@ -172,9 +193,9 @@ public class GameScreen extends ScreenAdapter
                 friction = Ground.FRICTION_NORMAL;
             }
 
-            if (stage >= 2 && friction != Ground.FRICTION_HIGH && MathUtils.randomBoolean(0.3f))
+            if (currentMaxAngle > 0 && friction != Ground.FRICTION_HIGH && MathUtils.randomBoolean(0.3f))
             {
-                angle = MathUtils.random(-MAX_ROTATION_ANGLE, MAX_ROTATION_ANGLE);
+                angle = MathUtils.random(-currentMaxAngle, currentMaxAngle);
             }
 
             Body groundBody = Ground.createGround(world, x, y, width, GROUND_HEIGHT, angle, friction);
@@ -233,7 +254,15 @@ public class GameScreen extends ScreenAdapter
 
 
     @Override
-    public void render(float delta) {
+    public void render(float delta)
+    {
+        handlePauseInput();
+
+        if (!isPaused)
+        {
+            update(delta);
+        }
+
         update(delta);
 
         Gdx.gl.glClearColor(0.2f, 0.2f, 0.2f, 1);
@@ -304,6 +333,15 @@ public class GameScreen extends ScreenAdapter
             uiCamera.viewportHeight - 20,
             100, Align.left, false);
 
+        if (isPaused)
+        {
+            float texWidth = pauseTexture.getWidth();
+            float texHeight = pauseTexture.getHeight();
+            batch.draw(pauseTexture,
+                (uiCamera.viewportWidth - texWidth) / 2,
+                (uiCamera.viewportHeight - texHeight) / 2);
+        }
+
         batch.end();
     }
 
@@ -311,7 +349,7 @@ public class GameScreen extends ScreenAdapter
     {
         if (Gdx.input.isKeyPressed(Keys.SPACE))
         {
-            world.setGravity(defaultGravity.cpy().scl(2.0f)); 
+            world.setGravity(defaultGravity.cpy().scl(2.0f));
         }
         else
         {
@@ -374,6 +412,7 @@ public class GameScreen extends ScreenAdapter
         shapeRenderer.dispose();
         batch.dispose();
         font.dispose();
+        pauseTexture.dispose();
     }
 
     @Override
