@@ -28,6 +28,7 @@ public class GameScreen extends ScreenAdapter
     private Texture pauseTexture;
     private SpriteBatch batch;
     private BitmapFont font;
+    private BitmapFont gameClearFont; // 게임 클리어용 폰트
     private OrthographicCamera uiCamera;
     private final float FORCE_MULTIPLIER = 100.0f;
     private final Box2DDebugRenderer box2DDebugRenderer;
@@ -48,13 +49,15 @@ public class GameScreen extends ScreenAdapter
     private final float MIN_GROUND_Y = 1f;
     private final float MAX_GROUND_Y = 6f;
     private final float GROUND_HEIGHT = 0.5f;
-    private final float GENERATE_DISTANCE = 20f;
-    private final float REMOVE_DISTANCE = 25f;
+    private final float GENERATE_DISTANCE = 0f;
+    private final float REMOVE_DISTANCE = 5f;
     private int score = 0;
     private int stage = 1;
-    private final int SCORE_PER_STAGE = 100;
-    private final float MAX_ROTATION_ANGLE_STAGE_2 = MathUtils.PI / 6;
-    private final float MAX_ROTATION_ANGLE_STAGE_3 = MathUtils.PI / 4;
+    private final int SCORE_PER_STAGE = 500;
+    private final int CLEAR_SCORE = 2000;
+    private boolean isGameClear = false;
+    private final float MAX_ROTATION_ANGLE_STAGE_2 = MathUtils.PI / 8;
+    private final float MAX_ROTATION_ANGLE_STAGE_3 = MathUtils.PI / 6;
 
     public GameScreen()
     {
@@ -75,6 +78,12 @@ public class GameScreen extends ScreenAdapter
         batch = new SpriteBatch();
         font = new BitmapFont();
         font.setColor(Color.WHITE);
+
+        // 게임 클리어 폰트 초기화
+        gameClearFont = new BitmapFont();
+        gameClearFont.setColor(Color.YELLOW);
+        gameClearFont.getData().setScale(3.0f); // 폰트 크기 3배
+
         pauseTexture = new Texture(Gdx.files.internal("pause.png"));
 
         player = createPlayer();
@@ -82,7 +91,7 @@ public class GameScreen extends ScreenAdapter
     }
     private void handlePauseInput()
     {
-        if (Gdx.input.isKeyJustPressed(Keys.ESCAPE))
+        if (Gdx.input.isKeyJustPressed(Keys.ESCAPE) && !isGameClear)
         {
             isPaused = !isPaused;
         }
@@ -101,13 +110,26 @@ public class GameScreen extends ScreenAdapter
 
     public void addScore(int amount)
     {
+        if (isGameClear) return;
+
         score += amount;
         Gdx.app.log("GameScreen", "Score: " + score);
-        int calculatedStage = (score / SCORE_PER_STAGE) + 1;
-        if (calculatedStage > stage)
+
+        if (score >= CLEAR_SCORE)
         {
-            stage = calculatedStage;
-            Gdx.app.log("GameScreen", "Stage Up! Current Stage: " + stage);
+            isGameClear = true;
+            isPaused = true;
+            Gdx.app.log("GameScreen", "Game Clear!");
+        }
+
+        if (!isGameClear)
+        {
+            int calculatedStage = (score / SCORE_PER_STAGE) + 1;
+            if (calculatedStage > stage)
+            {
+                stage = calculatedStage;
+                Gdx.app.log("GameScreen", "Stage Up! Current Stage: " + stage);
+            }
         }
     }
 
@@ -201,7 +223,9 @@ public class GameScreen extends ScreenAdapter
             Body groundBody = Ground.createGround(world, x, y, width, GROUND_HEIGHT, angle, friction);
             grounds.add(groundBody);
 
-            nextGroundX += width + MathUtils.random(1.0f, 3.0f);
+            float minGap = 1.0f + (stage - 1) * 0.2f;
+            float maxGap = 3.0f + (stage - 1) * 0.3f;
+            nextGroundX += width + MathUtils.random(minGap, maxGap);
         }
     }
 
@@ -262,8 +286,6 @@ public class GameScreen extends ScreenAdapter
         {
             update(delta);
         }
-
-        update(delta);
 
         Gdx.gl.glClearColor(0.2f, 0.2f, 0.2f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -333,13 +355,23 @@ public class GameScreen extends ScreenAdapter
             uiCamera.viewportHeight - 20,
             100, Align.left, false);
 
-        if (isPaused)
+        if (isPaused && !isGameClear)
         {
             float texWidth = pauseTexture.getWidth();
             float texHeight = pauseTexture.getHeight();
             batch.draw(pauseTexture,
                 (uiCamera.viewportWidth - texWidth) / 2,
                 (uiCamera.viewportHeight - texHeight) / 2);
+        }
+
+        // 게임 클리어 텍스트 렌더링
+        if (isGameClear)
+        {
+            gameClearFont.draw(batch, "GAME CLEAR",
+                0,
+                uiCamera.viewportHeight / 2,
+                uiCamera.viewportWidth,
+                Align.center, false);
         }
 
         batch.end();
@@ -412,6 +444,7 @@ public class GameScreen extends ScreenAdapter
         shapeRenderer.dispose();
         batch.dispose();
         font.dispose();
+        gameClearFont.dispose();
         pauseTexture.dispose();
     }
 
