@@ -63,7 +63,7 @@ public class GameScreen extends ScreenAdapter
     {
         camera = new OrthographicCamera();
         float worldWidth = 20f;
-        float worldHeight = worldWidth * (Gdx.graphics.getHeight() / (float) Gdx.graphics.getWidth()); // 화면 비율에 맞춤
+        float worldHeight = worldWidth * (Gdx.graphics.getHeight() / (float) Gdx.graphics.getWidth());
         viewport = new FitViewport(worldWidth, worldHeight, camera);
         camera.position.set(worldWidth / 4f, worldHeight / 2f, 0);
 

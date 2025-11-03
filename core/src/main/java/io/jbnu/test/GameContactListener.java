@@ -42,7 +42,6 @@ public class GameContactListener implements ContactListener {
             }
         }
 
-        // 충돌 처리
         if (playerFixture != null && groundUserData != null)
         {
             gameScreen.resetJumpCount();

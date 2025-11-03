@@ -1,4 +1,3 @@
-// Ground.java 수정 예시
 package io.jbnu.test;
 
 import com.badlogic.gdx.graphics.Color;
